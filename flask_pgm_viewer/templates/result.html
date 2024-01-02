@@ -1,0 +1,36 @@
+<!-- result.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Result Page</title>
+</head>
+<body>
+    <h1>Result: {{ predicted_class }}</h1>
+    <img src="{{ pgm_map_data_uri }}" alt="PGM Map" />
+
+    <!-- Add a button to generate PDF -->
+    <button onclick="generatePDF()">Generate PDF</button>
+    <script src="https://unpkg.com/html2pdf.js/dist/html2pdf.bundle.js"></script>
+
+    <script>
+        // Function to generate PDF using html2pdf.js
+        function generatePDF() {
+            const element = document.body;
+
+            // Set options for html2pdf.js
+            const opt = {
+                margin: 0,
+                filename: 'result.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            // Use html2pdf.js to generate PDF
+            html2pdf().from(element).set(opt).save();
+        }
+    </script>
+</body>
+</html>

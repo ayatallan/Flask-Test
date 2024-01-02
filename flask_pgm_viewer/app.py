@@ -1,3 +1,4 @@
+# app.py
 import rospy
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
@@ -5,7 +6,10 @@ import cv2
 import numpy as np
 from tensorflow import keras
 from tensorflow.keras.preprocessing import image
-from flask import Flask, render_template, Response
+from flask import Flask, render_template, Response, send_file
+import io
+import matplotlib.pyplot as plt
+import base64
 
 app = Flask(__name__)
 
@@ -83,6 +87,81 @@ def generate_frames():
 @app.route('/video_feed')
 def video_feed():
     return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+def read_pgm(file_path):
+    with open(file_path, 'rb') as f:
+        # Read the magic number (P5)
+        magic_number = f.readline().decode().strip()
+        if magic_number != 'P5':
+            raise ValueError("Invalid PGM file format")
+
+        # Skip comment lines
+        while True:
+            line = f.readline().decode().strip()
+            if not line.startswith('#'):
+                break
+
+        # Read width, height, and maximum pixel value
+        width, height = map(int, line.split())
+        max_pixel_value = int(f.readline().decode().strip())
+
+        # Read pixel data
+        pixel_data = bytearray(f.read())
+
+    return width, height, max_pixel_value, pixel_data
+
+def generate_pgm_data_uri(file_path):
+    width, height, max_pixel_value, pixel_data = read_pgm(file_path)
+    image_array = np.frombuffer(pixel_data, dtype=np.uint8).reshape((height, width))
+
+    # Create a larger Matplotlib figure
+    plt.figure(figsize=(10, 10))
+
+    # Use a grayscale colormap
+    plt.imshow(image_array, cmap='gray', vmin=0, vmax=max_pixel_value)
+
+    # Remove the color bar
+    # plt.colorbar()
+
+    plt.title('SLAM 2D Map (Grayscale)')
+    plt.axis('off')  # Turn off axis labels
+
+    # Save the Matplotlib figure to a BytesIO object
+    img_buffer = io.BytesIO()
+    plt.savefig(img_buffer, format='png')
+    img_buffer.seek(0)
+
+    # Close the Matplotlib figure to free up resources
+    plt.close()
+
+    # Convert the image buffer to a data URI
+    pgm_data_uri = "data:image/png;base64," + base64.b64encode(img_buffer.read()).decode('utf-8')
+
+    return pgm_data_uri
+@app.route('/download_result_pdf')
+def download_result_pdf():
+    # PGM map data URI
+    pgm_map_data_uri = generate_pgm_data_uri("/home/ayat/Desktop/flask/flask_pgm_viewer/gmapping_01.pgm")
+
+    # Render the result.html template with the prediction and PGM map data URI
+    html_content = render_template('result.html', predicted_class=predicted_class, pgm_map_data_uri=pgm_map_data_uri)
+
+    # Create a PDF using html2pdf.js
+    pdf_file = html2pdf.create_pdf(html_content)
+
+    # Create a response with the PDF file
+    response = make_response(pdf_file)
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = 'inline; filename=result.pdf'
+
+    return response
+@app.route('/result')
+def result():
+    # PGM map data URI
+    pgm_map_data_uri = generate_pgm_data_uri("/home/ayat/Desktop/flask/flask_pgm_viewer/gmapping_01.pgm")
+
+    # Render the result.html template with the prediction and PGM map data URI
+    return render_template('result.html', predicted_class=predicted_class, pgm_map_data_uri=pgm_map_data_uri)
 
 def main():
     rospy.init_node('image_classifier_node', anonymous=True)
